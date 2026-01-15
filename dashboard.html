@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<!-- TOP BAR -->
+<div class="container mt-3 d-flex justify-content-between align-items-center">
+    <a href="/" class="btn btn-outline-primary btn-sm">⬅ Home</a>
+
+    <button onclick="toggleTheme()" class="btn btn-outline-secondary btn-sm">
+        🌙 / ☀️
+    </button>
+</div>
+
+<div class="container mt-4">
+
+    <h3 class="mb-4">📊 Dashboard Overview</h3>
+
+    <!-- KPI CARDS -->
+    <div class="row g-3">
+        {% for label, value, color in [
+            ("Total Tasks", total, "primary"),
+            ("Completed", completed, "success"),
+            ("Pending", pending, "warning"),
+            ("Overdue", overdue, "danger")
+        ] %}
+        <div class="col-md-3">
+            <div class="card-box text-center border border-{{ color }}">
+                <h6 class="text-muted">{{ label }}</h6>
+                <h2 class="fw-bold text-{{ color }}">{{ value }}</h2>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- PRIORITY CARDS -->
+    <div class="row g-3 mt-2">
+        <div class="col-md-4">
+            <div class="card-box text-center border-danger">
+                <h6>🔥 High Priority</h6>
+                <h3 class="text-danger">{{ high }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card-box text-center border-warning">
+                <h6>⚠ Medium Priority</h6>
+                <h3 class="text-warning">{{ medium }}</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card-box text-center border-success">
+                <h6>✅ Low Priority</h6>
+                <h3 class="text-success">{{ low }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="row g-3 mt-4">
+        <div class="col-md-7">
+            <div class="card-box">
+                <h6>📅 Tasks This Week</h6>
+                <canvas id="weekChart"></canvas>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card-box">
+                <h6>📌 Task Status</h6>
+                <canvas id="donutChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+/* WEEKLY BAR CHART */
+new Chart(document.getElementById("weekChart"), {
+    type: "bar",
+    data: {
+        labels: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
+        datasets: [{
+            label: "Tasks",
+            data: {{ week_tasks | tojson }},
+            backgroundColor: "#0d6efd",
+            borderRadius: 8
+        }]
+    }
+});
+
+/* DONUT CHART */
+new Chart(document.getElementById("donutChart"), {
+    type: "doughnut",
+    data: {
+        labels: ["Completed", "Pending", "Overdue"],
+        datasets: [{
+            data: [{{ completed }}, {{ pending }}, {{ overdue }}],
+            backgroundColor: ["#198754", "#ffc107", "#dc3545"]
+        }]
+    }
+});
+
+/* THEME */
+function toggleTheme() {
+    document.body.classList.toggle("dark-mode");
+    localStorage.setItem(
+        "theme",
+        document.body.classList.contains("dark-mode") ? "dark" : "light"
+    );
+}
+if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark-mode");
+}
+</script>
+
+</body>
+</html>

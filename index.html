@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Todo App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='chatbot.css') }}">
+</head>
+
+<body>
+
+<nav class="navbar custom-navbar navbar-expand-lg">
+    <div class="container-fluid">
+        <span class="navbar-brand fw-bold text-white">Todo</span>
+
+        <div class="d-flex align-items-center gap-3">
+
+            <!-- 🌙 / ☀️ THEME TOGGLE -->
+            <button onclick="toggleTheme()" class="btn btn-outline-light btn-sm theme-btn">
+                🌙 / ☀️
+            </button>
+
+            <a href="/" title="Home"><i class="bi bi-house fs-5"></i></a>
+            <a href="/dashboard" title="Dashboard"><i class="bi bi-bar-chart-line fs-5"></i></a>
+            <a href="/achievements" title="Achievements"><i class="bi bi-trophy fs-5"></i></a>
+            <a href="/calendar" title="Calendar"><i class="bi bi-calendar-event fs-5"></i></a>
+            <a href="/profile" title="Profile"><i class="bi bi-person-circle fs-5"></i></a>
+        </div>
+    </div>
+</nav>
+<!-- CONTENT -->
+<div class="container mt-4">
+
+    <div class="card-box">
+        <h4>Add Task</h4>
+        <form method="POST">
+            <input class="form-control mb-2" name="title" placeholder="Task title" required>
+            <input class="form-control mb-2" name="desc" placeholder="Description" required>
+
+            <select class="form-control mb-2" name="category" required>
+                <option value="">Category</option>
+                <option>Work</option>
+                <option>Personal</option>
+                <option>Study</option>
+                <option>Health</option>
+                <option>Other</option>
+            </select>
+
+            <select class="form-control mb-2" name="priority" required>
+                <option value="">Priority</option>
+                <option>High</option>
+                <option>Medium</option>
+                <option>Low</option>
+            </select>
+
+            <input type="datetime-local" class="form-control mb-3" name="end_time" required>
+            <button class="btn btn-dark w-100">Add Task</button>
+        </form>
+    </div>
+
+    <div class="card-box">
+        <h4>Your Tasks</h4>
+
+        {% for t in todos %}
+        <div class="todo-item">
+            <b>{{ t.title }}</b>
+            <span class="badge bg-secondary">{{ t.category }}</span>
+
+            {% if t.priority == "High" %}
+                <span class="badge bg-danger">High</span>
+            {% elif t.priority == "Medium" %}
+                <span class="badge bg-warning text-dark">Medium</span>
+            {% else %}
+                <span class="badge bg-success">Low</span>
+            {% endif %}
+
+            {% if t.status == "Completed" %}
+                <span class="badge bg-success ms-1">Completed</span>
+            {% elif t.status == "Overdue" %}
+                <span class="badge bg-danger ms-1">Overdue</span>
+            {% else %}
+                <span class="badge bg-primary ms-1">Pending</span>
+            {% endif %}
+
+            <p class="mt-2 mb-1">{{ t.desc }}</p>
+            <small class="text-muted">
+                Due: {{ t.end_time.strftime('%d %b %Y %H:%M') }}
+            </small>
+
+            <div class="mt-2">
+                {% if t.status == "Pending" %}
+                    <a href="/complete/{{ t.sno }}" class="btn btn-success btn-sm">Complete</a>
+                    <a href="/update/{{ t.sno }}" class="btn btn-warning btn-sm">Update</a>
+                {% endif %}
+                <a href="/delete/{{ t.sno }}" class="btn btn-danger btn-sm">Delete</a>
+            </div>
+        </div>
+        {% else %}
+            <p class="text-muted">No tasks added yet.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 🤖 CHATBOT ICON -->
+<div id="chatbot-icon" onclick="toggleChatbot()">🤖</div>
+
+<!-- 💬 CHATBOT WINDOW -->
+<div id="chatbot-box">
+    <div id="chatbot-header">
+        Todo Assistant 🤖
+        <span style="cursor:pointer" onclick="toggleChatbot()">✖</span>
+    </div>
+
+    <div id="chatbot-messages">
+        <div class="bot-msg">Hello 👋 Type <b>help</b> to start.</div>
+    </div>
+
+    <div id="chatbot-input">
+        <input type="text" id="chatInput" placeholder="Type a message..." />
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+function toggleChatbot() {
+    const box = document.getElementById("chatbot-box");
+    box.style.display = box.style.display === "flex" ? "none" : "flex";
+}
+
+async function sendMessage() {
+    const input = document.getElementById("chatInput");
+    const msg = input.value.trim();
+    if (!msg) return;
+
+    const messages = document.getElementById("chatbot-messages");
+
+    messages.innerHTML += `<div class="user-msg">${msg}</div>`;
+    input.value = "";
+
+    const res = await fetch("/chatbot", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ message: msg })
+    });
+
+    const data = await res.json();
+    messages.innerHTML += `<div class="bot-msg">${data.reply}</div>`;
+    messages.scrollTop = messages.scrollHeight;
+}
+</script>
+<script>
+function toggleTheme() {
+    document.body.classList.toggle("dark-mode");
+
+    localStorage.setItem(
+        "theme",
+        document.body.classList.contains("dark-mode") ? "dark" : "light"
+    );
+}
+
+// APPLY SAVED THEME ON LOAD
+window.onload = () => {
+    if (localStorage.getItem("theme") === "dark") {
+        document.body.classList.add("dark-mode");
+    }
+};
+</script>
+</body>
+</html>

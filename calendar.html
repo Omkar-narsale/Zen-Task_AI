@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Calendar</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container-fluid">
+        <span class="navbar-brand">📅 Calendar</span>
+
+        <div class="d-flex gap-3 align-items-center">
+            <button onclick="toggleTheme()" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-moon-stars"></i>
+            </button>
+            <a href="/" class="text-light">
+                <i class="bi bi-house fs-5"></i>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<!-- CONTENT -->
+<div class="container mt-5">
+
+    <div class="card-box text-center">
+        <h5 class="mb-3">📆 View Task History</h5>
+
+        <form method="GET" action="/date-todos">
+            <input type="date" name="date" class="form-control mb-3" required>
+            <button class="btn btn-dark w-100">View Tasks</button>
+        </form>
+
+        <p class="text-muted mt-3 mb-0">
+            Shows tasks created on selected date
+        </p>
+    </div>
+
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Theme Script -->
+<script>
+function toggleTheme() {
+    document.body.classList.toggle("dark-mode");
+    localStorage.setItem(
+        "theme",
+        document.body.classList.contains("dark-mode") ? "dark" : "light"
+    );
+}
+
+if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark-mode");
+}
+</script>
+
+</body>
+</html>

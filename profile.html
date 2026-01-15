@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Profile</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<!-- TOP BAR -->
+<div class="container mt-3 d-flex justify-content-between align-items-center">
+    <div class="d-flex gap-2">
+        <a href="/" class="btn btn-outline-primary btn-sm">⬅ Home</a>
+        <button onclick="toggleTheme()" class="btn btn-outline-secondary btn-sm">🌙 / ☀️</button>
+    </div>
+
+    <!-- ✅ LOGOUT BUTTON -->
+    <a href="/logout" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-box-arrow-right"></i> Logout
+    </a>
+</div>
+
+<div class="container mt-4">
+
+    <h3 class="mb-4">👤 Profile Overview</h3>
+
+    <!-- 🔹 PROFILE SUMMARY CARDS (VERTICAL & STYLISH) -->
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card-box text-center glow-card">
+                <i class="bi bi-list-task fs-2 text-primary"></i>
+                <h6 class="mt-2">Total Tasks</h6>
+                <h2 class="fw-bold">{{ total }}</h2>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card-box text-center glow-card">
+                <i class="bi bi-check-circle fs-2 text-success"></i>
+                <h6 class="mt-2">Completed</h6>
+                <h2 class="fw-bold text-success">{{ completed }}</h2>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card-box text-center glow-card">
+                <i class="bi bi-hourglass-split fs-2 text-warning"></i>
+                <h6 class="mt-2">Pending</h6>
+                <h2 class="fw-bold text-warning">{{ pending }}</h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🔹 OVERALL COMPLETION -->
+    <div class="card-box mt-4">
+        <h6>Overall Completion</h6>
+        <div class="progress" style="height:22px;">
+            <div id="overallBar" class="progress-bar bg-success" style="width:0%">
+                0%
+            </div>
+        </div>
+    </div>
+
+    <!-- 🔹 ACHIEVEMENTS -->
+    <div class="card-box mt-4">
+        <h6>🏆 Achievements</h6>
+
+        {% for bar in achievement_bars %}
+        <div class="mb-3">
+            <small class="fw-bold">{{ bar.label }}</small>
+            <div class="progress" style="height:18px;">
+                <div class="progress-bar bg-info progress-animate"
+                     data-progress="{{ bar.progress }}"
+                     style="width:0%">
+                    0%
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<!-- JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+window.onload = () => {
+    const percent = {{ percent }};
+    const bar = document.getElementById("overallBar");
+
+    bar.style.width = percent + "%";
+    bar.innerText = percent + "%";
+
+    document.querySelectorAll(".progress-animate").forEach(el => {
+        const v = el.dataset.progress;
+        el.style.width = v + "%";
+        el.innerText = v + "%";
+    });
+};
+
+function toggleTheme() {
+    document.body.classList.toggle("dark-mode");
+    localStorage.setItem(
+        "theme",
+        document.body.classList.contains("dark-mode") ? "dark" : "light"
+    );
+}
+if (localStorage.getItem("theme") === "dark") {
+    document.body.classList.add("dark-mode");
+}
+</script>
+
+</body>
+</html>
