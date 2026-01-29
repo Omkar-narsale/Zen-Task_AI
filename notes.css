@@ -1,0 +1,28 @@
+body {
+    background: #f4f6f9;
+}
+
+.note-card {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+}
+
+.note-item {
+    background: #ffffff;
+    padding: 16px;
+    border-radius: 14px;
+    min-height: 200px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+    transition: 0.3s ease;
+}
+
+.note-item h6 {
+    font-weight: bold;
+}
+
+.note-item:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 0 25px rgba(255,193,7,0.5);
+}

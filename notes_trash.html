@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+    <title>Trash Notes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between mb-3">
+        <h3>🗑 Trash</h3>
+        <a href="/notes" class="btn btn-outline-primary btn-sm">⬅ Back</a>
+    </div>
+
+    <div class="row g-3">
+        {% for note in notes %}
+        <div class="col-md-4">
+            <div class="card p-3 glow-card">
+                <h5>{{ note.title }}</h5>
+                <p>{{ note.content }}</p>
+
+                <a href="/notes/restore/{{ note.id }}"
+                   class="btn btn-success btn-sm">
+                   Restore
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted text-center">Trash is empty.</p>
+        {% endfor %}
+    </div>
+</div>
+
+</body>
+</html>
