@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root{
+  --bg:#0b0b0d;
+  --card:#141417;
+  --text:#eaeaea;
+  --muted:#9ca3af;
+  --gold:#f5c26b;
+}
+
+*{box-sizing:border-box;font-family:Inter,system-ui}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* ---------- NAVBAR ---------- */
+.nav{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:18px 30px;
+  background:#0f0f12;
+}
+
+.nav h2{margin:0;font-weight:600}
+.nav a{
+  text-decoration:none;
+  color:white;
+  padding:8px 14px;
+  border-radius:8px;
+  background:#1f1f25;
+}
+.nav a:hover{background:var(--gold);color:black}
+
+/* ---------- DASHBOARD ---------- */
+.container{
+  padding:30px;
+}
+
+.section-title{
+  font-size:20px;
+  margin-bottom:18px;
+}
+
+/* ---------- CARDS ---------- */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:20px;
+}
+
+.card{
+  background:var(--card);
+  padding:22px;
+  border-radius:16px;
+  text-align:center;
+  position:relative;
+  transition:.35s;
+  border:1px solid transparent;
+}
+
+.card:hover{
+  border-color:var(--gold);
+  box-shadow:0 0 25px rgba(245,194,107,.35);
+  transform:translateY(-4px);
+}
+
+.card span{
+  font-size:14px;
+  color:var(--muted);
+}
+
+.card h1{
+  margin:14px 0 0;
+  font-size:34px;
+}
+
+/* COLORS */
+.blue{color:#3b82f6}
+.green{color:#22c55e}
+.yellow{color:#facc15}
+.red{color:#ef4444}
+
+/* ---------- CHARTS ---------- */
+.charts{
+  margin-top:40px;
+  display:grid;
+  grid-template-columns:2fr 1fr;
+  gap:25px;
+}
+
+.chart-card{
+  background:var(--card);
+  padding:20px;
+  border-radius:16px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- NAV -->
+<div class="nav">
+  <h2>📊 Admin Dashboard</h2>
+  <div>
+    <a href="/admin/assign-task">➕ Assign</a>
+    <a href="/logout">🚪 Logout</a>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="container">
+
+<h3 class="section-title">Dashboard Overview</h3>
+
+<div class="grid">
+  <div class="card">
+    <span>Total Tasks</span>
+    <h1 class="blue">{{ total }}</h1>
+  </div>
+
+  <div class="card">
+    <span>Completed</span>
+    <h1 class="green">{{ completed }}</h1>
+  </div>
+
+  <div class="card">
+    <span>Pending</span>
+    <h1 class="yellow">{{ pending }}</h1>
+  </div>
+
+  <div class="card">
+    <span>Submitted</span>
+    <h1 class="red">{{ submitted }}</h1>
+  </div>
+</div>
+
+<!-- CHARTS -->
+<div class="charts">
+
+  <div class="chart-card">
+    <h4>📈 Submissions Trend</h4>
+    <canvas id="lineChart"></canvas>
+  </div>
+
+  <div class="chart-card">
+    <h4>📌 Task Status</h4>
+    <canvas id="donutChart"></canvas>
+  </div>
+
+</div>
+</div>
+
+<script>
+new Chart(document.getElementById("lineChart"),{
+  type:"line",
+  data:{
+    labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
+    datasets:[{
+      label:"Tasks",
+      data:[2,4,3,5,1,4,2],
+      borderColor:"#3b82f6",
+      tension:.4
+    }]
+  },
+  options:{plugins:{legend:{display:false}}}
+})
+
+new Chart(document.getElementById("donutChart"),{
+  type:"doughnut",
+  data:{
+    labels:["Completed","Pending","Submitted"],
+    datasets:[{
+      data:[{{ completed }},{{ pending }},{{ submitted }}],
+      backgroundColor:["#22c55e","#facc15","#ef4444"]
+    }]
+  }
+})
+</script>
+
+</body>
+</html>

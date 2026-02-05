@@ -5,11 +5,17 @@ from sqlalchemy import case, or_
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
+import os
+from werkzeug.utils import secure_filename
+from flask import send_from_directory
 # ================= APP =================
 app = Flask(__name__)
 app.secret_key = "todo-final-secret"
+UPLOAD_FOLDER = "uploads/assignments"
+ALLOWED_EXTENSIONS = {"pdf"}
 
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///todo.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
@@ -24,9 +30,13 @@ class User(db.Model):
     name = db.Column(db.String(100))
     email = db.Column(db.String(120), unique=True)
     password = db.Column(db.String(100))
+    # ROLE SYSTEM (ADD-ON)
+    role = db.Column(db.String(20), default="student")  
+# student / admin
+    admin_type = db.Column(db.String(20), nullable=True)  
+# teacher / hod / principal (only if role == admin)
 
-
-class Todo(db.Model):
+class Todo(db.Model): 
     sno = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200))
     desc = db.Column(db.String(500))
@@ -54,6 +64,24 @@ class Note(db.Model):
 
     date_created = db.Column(db.DateTime, default=datetime.now)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+# ================= ADMIN ASSIGNED TASKS =================
+class AssignedTask(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    title = db.Column(db.String(200))
+    description = db.Column(db.Text)
+    deadline = db.Column(db.DateTime)
+
+    status = db.Column(db.String(20), default="Pending")
+    is_late = db.Column(db.Boolean, default=False)
+
+    assigned_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    assigned_to = db.Column(db.Integer, db.ForeignKey("user.id"))
+
+    submission_file = db.Column(db.String(300), nullable=True)
+    submitted_at = db.Column(db.DateTime, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
 # ================= EMAIL =================
 def send_email(to_email, subject, message):
@@ -80,19 +108,32 @@ def login():
             email=request.form["email"],
             password=request.form["password"]
         ).first()
-        if user:
-            session["user_id"] = user.id
-            return redirect("/")
+
+        if not user:
+            return render_template("login.html", error="Invalid credentials")
+
+        session["user_id"] = user.id
+
+        if user.role == "admin":
+            return redirect("/admin/dashboard")
+
+        return redirect("/")
+
     return render_template("login.html")
 
 
 @app.route("/register", methods=["GET","POST"])
 def register():
     if request.method == "POST":
+        role = request.form.get("role", "student")
+        admin_type = request.form.get("admin_type") if role == "admin" else None
+
         user = User(
             name=request.form["name"],
             email=request.form["email"],
-            password=request.form["password"]
+            password=request.form["password"],
+            role=role,
+            admin_type=admin_type
         )
         db.session.add(user)
         db.session.commit()
@@ -104,6 +145,7 @@ def register():
 def logout():
     session.clear()
     return redirect("/login")
+
 
 # ================= HOME / TODO =================
 @app.route("/", methods=["GET","POST"])
@@ -201,6 +243,188 @@ def update(sno):
         return redirect("/")
     return render_template("update.html", todo=t)
 
+# ================= ADMIN ASSIGN TASK =================
+
+@app.route("/admin/assign-task", methods=["GET", "POST"])
+def admin_assign_task():
+    if not is_admin():
+        return redirect("/")
+
+    if request.method == "POST":
+        title = request.form["title"]
+        description = request.form["description"]
+        deadline = datetime.strptime(
+            request.form["deadline"], "%Y-%m-%dT%H:%M"
+        )
+        student_id = request.form["student_id"]
+
+        task = AssignedTask(
+            title=title,
+            description=description,
+            deadline=deadline,
+            assigned_by=session["user_id"],
+            assigned_to=student_id
+        )
+        db.session.add(task)
+        db.session.commit()
+
+        student = User.query.get(student_id)
+        send_email(
+            student.email,
+            "📘 New Assigned Task",
+            f"You have a new task: {title}"
+        )
+
+        return redirect("/admin/assign-task")
+
+    students = User.query.filter_by(role="student").all()
+    tasks = AssignedTask.query.order_by(
+        AssignedTask.created_at.desc()
+    ).all()
+
+    return render_template(
+        "admin_assign_task.html",
+        students=students,
+        tasks=tasks
+    )
+
+
+@app.route("/admin/update-task/<int:task_id>", methods=["GET","POST"])
+def admin_update_task(task_id):
+    if not is_admin():
+        return redirect("/")
+
+    task = AssignedTask.query.get_or_404(task_id)
+
+    if request.method == "POST":
+        task.title = request.form["title"]
+        task.description = request.form["description"]
+        task.deadline = datetime.strptime(
+            request.form["deadline"], "%Y-%m-%dT%H:%M"
+        )
+        db.session.commit()
+        return redirect("/admin/assign-task")
+
+    return render_template(
+        "admin_update_task.html",
+        task=task
+    )
+@app.route("/admin/download/<filename>")
+def download_submission(filename):
+    if not is_admin():
+        return redirect("/")
+    return send_from_directory(
+        app.config["UPLOAD_FOLDER"], filename, as_attachment=True
+    )
+
+
+# ================= STUDENT ASSIGNED TASKS =================
+
+@app.route("/student/assigned-tasks")
+def student_assigned_tasks():
+    if not is_student():
+        return redirect("/")
+
+    tasks = AssignedTask.query.filter_by(
+        assigned_to=session["user_id"]
+    ).all()
+
+    return render_template(
+        "student_assigned_tasks.html",
+        tasks=tasks
+    )
+
+@app.route("/student/submit-task/<int:task_id>", methods=["POST"])
+def submit_assigned_task(task_id):
+    if not is_student():
+        return redirect("/")
+
+    task = AssignedTask.query.get_or_404(task_id)
+
+    if task.assigned_to != session["user_id"]:
+        return redirect("/")
+
+    file = request.files.get("submission")
+
+    # PDF is OPTIONAL
+    if file and file.filename != "":
+        filename = secure_filename(file.filename)
+        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(save_path)
+
+        task.submission_file = filename
+
+    # Late check
+    now = datetime.now()
+    if task.deadline and now > task.deadline:
+        task.is_late = True
+
+    task.submitted_at = now
+    task.status = "Submitted"
+
+    db.session.commit()
+    return redirect("/student/assigned-tasks")
+# ================= ADMIN DASHBOARD =================
+@app.route("/admin/dashboard")
+def admin_dashboard():
+    if not is_admin():
+        return redirect("/")
+
+    tasks = AssignedTask.query.order_by(
+        AssignedTask.created_at.desc()
+    ).all()
+
+    total = len(tasks)
+    pending = AssignedTask.query.filter_by(status="Pending").count()
+    submitted = AssignedTask.query.filter_by(status="Submitted").count()
+    completed = AssignedTask.query.filter_by(status="Reviewed").count()
+
+    return render_template(
+        "admin_dashboard.html",
+        tasks=tasks,
+        total=total,
+        pending=pending,
+        submitted=submitted,
+        completed=completed
+    )
+# ================= ADMIN ACCEPT TASK =================
+@app.route("/admin/accept-task/<int:task_id>")
+def admin_accept_task(task_id):
+    if not is_admin():
+        return redirect("/")
+
+    task = AssignedTask.query.get_or_404(task_id)
+    task.status = "Reviewed"
+    db.session.commit()
+
+    return redirect("/admin/dashboard")
+
+# ================= ADMIN RESUBMIT TASK =================
+@app.route("/admin/resubmit-task/<int:task_id>")
+def admin_resubmit_task(task_id):
+    if not is_admin():
+        return redirect("/")
+
+    task = AssignedTask.query.get_or_404(task_id)
+
+    task.status = "Pending"
+    task.submission_file = None
+    task.submitted_at = None
+    task.is_late = False
+
+    db.session.commit()
+    return redirect("/admin/dashboard")
+
+@app.route("/admin/review-task/<int:task_id>")
+def admin_review_task(task_id):
+    if not is_admin():
+        return redirect("/")
+
+    task = AssignedTask.query.get_or_404(task_id)
+    task.status = "Reviewed"
+    db.session.commit()
+
+    return redirect("/admin/dashboard")
 # ================= DASHBOARD =================
 @app.route("/dashboard")
 def dashboard():
@@ -394,205 +618,176 @@ def restore_note(id):
     note.is_deleted = False
     db.session.commit()
     return redirect("/notes/trash")
+
 # ================= CHATBOT =================
 @app.route("/chatbot", methods=["POST"])
 def chatbot():
     if "user_id" not in session:
-        return jsonify({"reply": "Please login first."})
+        return jsonify({"reply":"🔒 Please login first."})
 
-    msg = request.get_json().get("message", "").lower().strip()
+    msg = request.get_json().get("message","").lower().strip()
     uid = session["user_id"]
 
-    # ================= HELP =================
     if msg == "help":
         return jsonify({"reply":
-            "🤖 I can help you with:\n\n"
+            "🤖 Commands:\n"
             "• add task Buy milk\n"
             "• show tasks\n"
             "• complete task Buy milk\n"
             "• delete task Buy milk\n"
             "• show overdue\n"
             "• today tasks\n"
-            "• task stats\n\n"
-            "📝 Notes:\n"
+            "• task stats\n"
             "• add note Meeting ideas\n"
             "• show notes\n"
             "• pin note Meeting ideas\n"
             "• show pinned notes"
         })
 
-    # ================= ADD TASK =================
     if msg.startswith("add task"):
-        title = msg.replace("add task", "").strip() or "New Task"
+        title = msg.replace("add task","").strip() or "New Task"
         todo = Todo(
             title=title,
-            desc="Added via chatbot",
+            desc="🤖 Created by Chatbot",
             category="General",
             priority="Medium",
-            end_time=datetime.now() + timedelta(hours=2),
+            end_time=datetime.now()+timedelta(hours=2),
             user_id=uid
         )
         db.session.add(todo)
         db.session.commit()
-        return jsonify({"reply": f"✅ Task '{title}' added successfully!"})
+        return jsonify({"reply":f"✅ Task **{title}** added!"})
 
-    # ================= SHOW TASKS =================
-    if msg == "show tasks":
-        tasks = Todo.query.filter_by(
-            user_id=uid,
-            is_deleted=False
-        ).order_by(Todo.end_time.asc()).limit(5).all()
-
-        if not tasks:
-            return jsonify({"reply": "📭 You have no tasks."})
-
-        reply = "📝 Your tasks:\n"
-        for t in tasks:
-            reply += f"• {t.title} ({t.status})\n"
-
-        return jsonify({"reply": reply})
-
-    # ================= COMPLETE TASK =================
     if msg.startswith("complete task"):
-        title = msg.replace("complete task", "").strip()
+        title = msg.replace("complete task","").strip()
         task = Todo.query.filter(
-            Todo.user_id == uid,
+            Todo.user_id==uid,
             Todo.title.ilike(f"%{title}%"),
-            Todo.is_deleted == False
+            Todo.is_deleted==False
         ).first()
-
         if not task:
-            return jsonify({"reply": "❌ Task not found."})
-
+            return jsonify({"reply":"❌ Task not found"})
         task.status = "Completed"
         db.session.commit()
-        return jsonify({"reply": f"✅ Task '{task.title}' completed!"})
+        return jsonify({"reply":f"🎉 Task **{task.title}** completed!"})
 
-    # ================= DELETE TASK =================
     if msg.startswith("delete task"):
-        title = msg.replace("delete task", "").strip()
+        title = msg.replace("delete task","").strip()
         task = Todo.query.filter(
-            Todo.user_id == uid,
+            Todo.user_id==uid,
             Todo.title.ilike(f"%{title}%")
         ).first()
-
         if not task:
-            return jsonify({"reply": "❌ Task not found."})
-
+            return jsonify({"reply":"❌ Task not found"})
         task.is_deleted = True
         db.session.commit()
-        return jsonify({"reply": f"🗑 Task '{task.title}' deleted."})
+        return jsonify({"reply":f"🗑 Task **{task.title}** deleted!"})
 
-    # ================= OVERDUE =================
+    if msg == "show tasks":
+        tasks = Todo.query.filter_by(user_id=uid,is_deleted=False).limit(5).all()
+        if not tasks:
+            return jsonify({"reply":"📭 No tasks"})
+        reply = "📝 Tasks:\n"
+        for t in tasks:
+            reply += f"• {t.title} ({t.status})\n"
+        return jsonify({"reply":reply})
+
     if msg == "show overdue":
-        overdue = Todo.query.filter_by(
-            user_id=uid,
-            status="Overdue"
-        ).all()
-
-        if not overdue:
-            return jsonify({"reply": "🎉 No overdue tasks!"})
-
-        reply = "⚠️ Overdue tasks:\n"
-        for t in overdue:
+        tasks = Todo.query.filter_by(user_id=uid,status="Overdue").all()
+        if not tasks:
+            return jsonify({"reply":"🎉 No overdue tasks"})
+        reply = "⚠️ Overdue:\n"
+        for t in tasks:
             reply += f"• {t.title}\n"
+        return jsonify({"reply":reply})
 
-        return jsonify({"reply": reply})
-
-    # ================= TODAY TASKS =================
     if msg == "today tasks":
         today = datetime.now().date()
         tasks = Todo.query.filter(
-            Todo.user_id == uid,
-            Todo.end_time >= datetime.combine(today, datetime.min.time()),
-            Todo.end_time <= datetime.combine(today, datetime.max.time())
+            Todo.user_id==uid,
+            Todo.end_time>=datetime.combine(today,datetime.min.time()),
+            Todo.end_time<=datetime.combine(today,datetime.max.time())
         ).all()
-
         if not tasks:
-            return jsonify({"reply": "🎉 No tasks due today."})
-
-        reply = "📅 Today's tasks:\n"
+            return jsonify({"reply":"🎉 No tasks today"})
+        reply = "📅 Today:\n"
         for t in tasks:
             reply += f"• {t.title}\n"
+        return jsonify({"reply":reply})
 
-        return jsonify({"reply": reply})
-
-    # ================= TASK STATS =================
     if msg == "task stats":
         total = Todo.query.filter_by(user_id=uid).count()
-        completed = Todo.query.filter_by(
-            user_id=uid,
-            status="Completed"
-        ).count()
+        completed = Todo.query.filter_by(user_id=uid,status="Completed").count()
+        return jsonify({"reply":f"📊 Total: {total}, Completed: {completed}"})
 
-        return jsonify({"reply": f"📊 Total tasks: {total}\n✅ Completed: {completed}"})
-
-    # ================= ADD NOTE =================
     if msg.startswith("add note"):
-        content = msg.replace("add note", "").strip()
+        content = msg.replace("add note","").strip()
         if not content:
-            return jsonify({"reply": "❌ Please provide note content."})
-
+            return jsonify({"reply":"❌ Empty note"})
         note = Note(
-            title="Chatbot Note",
+            title="🤖 Chatbot Note",
             content=content,
             tag="chatbot",
             user_id=uid
         )
         db.session.add(note)
         db.session.commit()
-        return jsonify({"reply": "📝 Note added successfully!"})
+        return jsonify({"reply":"📝 Note added!"})
 
-    # ================= SHOW NOTES =================
     if msg == "show notes":
-        notes = Note.query.filter_by(
-            user_id=uid,
-            is_deleted=False
-        ).order_by(Note.date_created.desc()).limit(5).all()
-
+        notes = Note.query.filter_by(user_id=uid,is_deleted=False).limit(5).all()
         if not notes:
-            return jsonify({"reply": "📭 No notes found."})
-
-        reply = "🗒 Your notes:\n"
+            return jsonify({"reply":"📭 No notes"})
+        reply = "🗒 Notes:\n"
         for n in notes:
             reply += f"• {n.content[:40]}...\n"
+        return jsonify({"reply":reply})
 
-        return jsonify({"reply": reply})
-
-    # ================= PIN NOTE =================
     if msg.startswith("pin note"):
-        text = msg.replace("pin note", "").strip()
+        text = msg.replace("pin note","").strip()
         note = Note.query.filter(
-            Note.user_id == uid,
+            Note.user_id==uid,
             Note.content.ilike(f"%{text}%"),
-            Note.is_deleted == False
+            Note.is_deleted==False
         ).first()
-
         if not note:
-            return jsonify({"reply": "❌ Note not found."})
-
+            return jsonify({"reply":"❌ Note not found"})
         note.pinned = True
         db.session.commit()
-        return jsonify({"reply": "📌 Note pinned!"})
+        return jsonify({"reply":"📌 Note pinned!"})
 
-    # ================= SHOW PINNED NOTES =================
     if msg == "show pinned notes":
-        notes = Note.query.filter_by(
-            user_id=uid,
-            pinned=True,
-            is_deleted=False
-        ).all()
-
+        notes = Note.query.filter_by(user_id=uid,pinned=True,is_deleted=False).all()
         if not notes:
-            return jsonify({"reply": "📭 No pinned notes."})
-
-        reply = "📌 Pinned notes:\n"
+            return jsonify({"reply":"📭 No pinned notes"})
+        reply = "📌 Pinned:\n"
         for n in notes:
             reply += f"• {n.content[:40]}...\n"
+        return jsonify({"reply":reply})
 
-        return jsonify({"reply": reply})
+    return jsonify({"reply":"🤔 I didn’t understand. Type help."})
 
-    return jsonify({"reply": "🤔 I didn’t understand. Type **help**."})
+# ================= HELPERS =================
+def is_admin():
+    return (
+        "user_id" in session and
+        User.query.get(session["user_id"]).role == "admin"
+    )
+
+def is_student():
+    return (
+        "user_id" in session and
+        User.query.get(session["user_id"]).role == "student"
+    )
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+@app.context_processor
+def inject_current_user():
+    user = None
+    if "user_id" in session:
+        user = User.query.get(session["user_id"])
+    return dict(current_user=user)
+
 # ================= RUN =================
 if __name__ == "__main__":
     with app.app_context():
