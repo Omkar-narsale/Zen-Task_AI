@@ -374,18 +374,18 @@ def admin_dashboard():
         AssignedTask.created_at.desc()
     ).all()
 
-    total = len(tasks)
+    total = AssignedTask.query.count()
     pending = AssignedTask.query.filter_by(status="Pending").count()
     submitted = AssignedTask.query.filter_by(status="Submitted").count()
     completed = AssignedTask.query.filter_by(status="Reviewed").count()
 
     return render_template(
         "admin_dashboard.html",
-        tasks=tasks,
         total=total,
         pending=pending,
         submitted=submitted,
-        completed=completed
+        completed=completed,
+        tasks=tasks   # 👈 THIS WAS MISSING
     )
 # ================= ADMIN ACCEPT TASK =================
 @app.route("/admin/accept-task/<int:task_id>")
@@ -425,6 +425,130 @@ def admin_review_task(task_id):
     db.session.commit()
 
     return redirect("/admin/dashboard")
+
+# ================= ADMIN DASHBOARD GRAPH API =================
+from sqlalchemy import func
+
+@app.route("/api/admin/task-trend")
+def admin_task_trend():
+    if not is_admin():
+        return jsonify({"labels": [], "data": []})
+
+    today = datetime.now().date()
+    last_7_days = [today - timedelta(days=i) for i in range(6, -1, -1)]
+
+    labels = []
+    data = []
+
+    for day in last_7_days:
+        count = AssignedTask.query.filter(
+            func.date(AssignedTask.created_at) == day
+        ).count()
+
+        labels.append(day.strftime("%a"))  # Mon Tue Wed
+        data.append(count)
+
+    return jsonify({
+        "labels": labels,
+        "data": data
+    })
+
+from sqlalchemy import func
+
+@app.route("/api/admin/task-trend-multiline")
+def admin_task_trend_multiline():
+    if not is_admin():
+        return jsonify({"labels": [], "submitted": [], "reviewed": []})
+
+    today = datetime.now().date()
+    days = [today - timedelta(days=i) for i in range(6, -1, -1)]
+
+    labels = []
+    submitted_data = []
+    reviewed_data = []
+
+    for day in days:
+        submitted_count = AssignedTask.query.filter(
+            func.date(AssignedTask.submitted_at) == day
+        ).count()
+
+        reviewed_count = AssignedTask.query.filter(
+            func.date(AssignedTask.created_at) == day,
+            AssignedTask.status == "Reviewed"
+        ).count()
+
+        labels.append(day.strftime("%a"))
+        submitted_data.append(submitted_count)
+        reviewed_data.append(reviewed_count)
+
+    return jsonify({
+        "labels": labels,
+        "submitted": submitted_data,
+        "reviewed": reviewed_data
+    })
+
+import csv
+from flask import Response
+
+@app.route("/admin/export/tasks/excel")
+def export_tasks_excel():
+    if not is_admin():
+        return redirect("/")
+
+    tasks = AssignedTask.query.order_by(AssignedTask.created_at.desc()).all()
+
+    def generate():
+        yield "Title,Status,Assigned To,Created At,Submitted At\n"
+        for t in tasks:
+            yield f'"{t.title}",{t.status},{t.assigned_to},{t.created_at},{t.submitted_at}\n'
+
+    return Response(
+        generate(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=admin_tasks.csv"}
+    )
+
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from io import BytesIO
+from flask import send_file
+
+@app.route("/admin/export/tasks/pdf")
+def export_tasks_pdf():
+    if not is_admin():
+        return redirect("/")
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    y = height - 40
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(40, y, "Admin Task Report")
+
+    pdf.setFont("Helvetica", 10)
+    y -= 30
+
+    tasks = AssignedTask.query.order_by(AssignedTask.created_at.desc()).all()
+
+    for t in tasks:
+        if y < 50:
+            pdf.showPage()
+            y = height - 40
+
+        pdf.drawString(40, y, f"• {t.title} | {t.status}")
+        y -= 15
+
+    pdf.save()
+    buffer.seek(0)
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name="admin_tasks.pdf",
+        mimetype="application/pdf"
+    )
+
 # ================= DASHBOARD =================
 @app.route("/dashboard")
 def dashboard():
